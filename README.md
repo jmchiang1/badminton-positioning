@@ -1,5 +1,7 @@
 # Courtwise
 
+**Live site: https://jmchiang1.github.io/badminton-positioning/**
+
 An interactive 3D badminton court for answering "where should I stand?". Place the players
 and the shuttle, pick a shot and its direction, and Courtwise moves everyone to where they
 should go next, with a role tag over each player. It works for singles and doubles.
@@ -58,7 +60,8 @@ npm run build
 ```
 
 `npm run build` writes a static site to `dist/` with relative paths, so it can be hosted
-anywhere: GitHub Pages, Vercel, Netlify, or a folder.
+anywhere: GitHub Pages, Vercel, Netlify, or a folder. Pushes to `main` deploy to GitHub Pages
+automatically (`.github/workflows/pages.yml`), after the tests pass.
 
 ## Code
 
