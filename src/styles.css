@@ -98,7 +98,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: rgb(14 21 27 / 0.9); border: 1px solid var(--line); backdrop-filter: blur(8px);
   display: flex; align-items: center; gap: 12px;
 }
-.playbar[hidden] { display: none; }
+.playctl [hidden] { display: none; }
+.playctl button:disabled { opacity: 0.35; cursor: default; }
+.serve.off { opacity: 0.4; }
+.serve.off button { cursor: default; }
 .caption { margin: 0; flex: 1; display: flex; flex-direction: column; font-size: 15px; }
 .caption span { font-size: 12px; color: var(--muted); }
 .caption i { font-style: normal; }
@@ -107,7 +110,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   min-width: 44px; min-height: 44px; border-radius: 10px; border: 1px solid var(--line);
   background: var(--panel-2); font-size: 18px;
 }
-.playctl .pp, .playctl #stopPlay { font-size: 13px; padding: 0 10px; }
+.playctl .pp, .playctl .txt { font-size: 13px; padding: 0 10px; }
 
 .plays #plays { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .play {
@@ -139,13 +142,12 @@ dialog li { margin: 4px 0; color: #d3dde3; font-size: 14px; }
   .cams { left: 8px; bottom: 8px; }
   .cams button { min-height: 36px; padding: 6px 10px; font-size: 12px; }
   .playbar { top: 8px; bottom: auto; padding: 8px; gap: 8px; }
-  .playbar:not([hidden]) ~ .notes, .notes { top: 8px; }
-  .stage:has(.playbar:not([hidden])) .notes { top: 84px; }
-  .stage:has(.playbar:not([hidden])) .hint { display: none; }
+  .notes { top: 84px; }
+  .hint { display: none; }
   .caption { font-size: 13.5px; }
   .caption .ptitle { display: none; }
   .playctl { gap: 4px; }
   .playctl button { min-width: 40px; }
-  .playctl .pp, .playctl #stopPlay { font-size: 12px; padding: 0 8px; }
+  .playctl .pp, .playctl .txt { font-size: 12px; padding: 0 8px; }
   .notes { top: 8px; }
 }

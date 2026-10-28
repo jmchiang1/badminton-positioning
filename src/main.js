@@ -299,8 +299,12 @@ function advance(nextShotKey) {
 
 const NEXT_SHOT = { up: 'smash', attack: 'block', net: 'lift', flat: 'drive' };
 
+// Shots already played in the free rally, so ‹ can step back through them.
+const history = [];
+
 function nextShot() {
   if (state.phase !== 'shown' || !state.result) return;
+  history.push(snapshot());
   const s = SHOTS[state.shot];
   let next = state.shot === 'drop' || state.shot === 'net' ? 'lift' : NEXT_SHOT[s.cls];
   if (next === 'block' && state.mode === 'singles') next = 'lift';
@@ -311,8 +315,16 @@ function nextShot() {
   renderControls();
 }
 
+function undoShot() {
+  if (!history.length || animating) return;
+  restore(history.pop());
+  backToSetup();
+  renderControls();
+}
+
 function resetAll() {
   stopPlay();
+  history.length = 0;
   state.setup = structuredClone(START[state.mode]);
   state.hitterId = 'A1';
   state.shot = 'smash';
@@ -365,10 +377,10 @@ function startPlay(def) {
     state.hitterId = def.start.hitter;
   }
   state.contact = contactFor(state.hitterId);
+  history.length = 0;
   play = { def, i: 0, paused: false, snapshots: [] };
   backToSetup();
   renderControls();
-  $('#playbar').hidden = false;
   renderPlays();
   runStep();
 }
@@ -457,16 +469,33 @@ function stopPlay() {
   if (!play) return;
   clearTimeout(play.timer);
   play = null;
-  $('#playbar').hidden = true;
   renderPlays();
+  updateCaption();
 }
 
+// The floating bar: a play's progress, or the free rally outside a play.
 function updateCaption(done = false) {
-  if (!play) return;
+  const pp = $('#playPause');
+  if (!play) {
+    const shotNo = history.length + 1;
+    $('#stepCount').innerHTML = `Your rally · Shot ${shotNo}`;
+    $('#stepNote').textContent = `${NAMES[state.hitterId]}: ${SHOTS[state.shot].label.toLowerCase()}`;
+    pp.hidden = true;
+    $('#prevStep').disabled = history.length === 0;
+    $('#prevStep').setAttribute('aria-label', 'Previous shot');
+    const label = state.phase === 'shown' ? 'Next shot from here' : 'Show where to go';
+    $('#nextStep').disabled = false;
+    $('#nextStep').setAttribute('aria-label', label);
+    $('#nextStep').title = label;
+    return;
+  }
   const { def, i } = play;
+  pp.hidden = false;
+  $('#prevStep').disabled = i === 0;
+  $('#nextStep').disabled = false;
+  $('#nextStep').setAttribute('aria-label', 'Next shot');
   $('#stepCount').innerHTML = `<i class="ptitle">${esc(def.title)} · </i>Shot ${i + 1} of ${def.steps.length}`;
   $('#stepNote').textContent = def.steps[i].note;
-  const pp = $('#playPause');
   const ended = done || (play.paused && i >= def.steps.length - 1);
   pp.textContent = ended ? 'Replay' : play.paused ? 'Play' : 'Pause';
   pp.setAttribute('aria-label', pp.textContent);
@@ -629,6 +658,7 @@ function renderHitters() {
     b.onclick = () => setHitter(id);
     el.append(b);
   }
+  updateCaption();
 }
 
 function renderShots() {
@@ -678,7 +708,10 @@ function renderDirections() {
     };
     el.append(b);
   }
-  $('#serveBox').hidden = !serve;
+  // Always shown (so the panel never jumps), greyed out unless the shot is a serve.
+  const box = $('#serveBox');
+  box.classList.toggle('off', !serve);
+  for (const b of box.querySelectorAll('button')) b.disabled = !serve;
 }
 
 function renderControls() {
@@ -694,7 +727,7 @@ function renderControls() {
 
 function syncButtons() {
   $('#show').textContent = state.phase === 'shown' ? 'Back to setup' : 'Show where to go';
-  $('#next').disabled = state.phase !== 'shown';
+  updateCaption();
 }
 
 const esc = (t) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -719,13 +752,20 @@ $('#show').onclick = () => {
   if (state.phase === 'shown') backToSetup();
   else show();
 };
-$('#next').onclick = () => { stopPlay(); nextShot(); };
-$('#reset').onclick = resetAll;
 $('#snap').onchange = (e) => { state.snap = e.target.checked; };
 $('#playPause').onclick = togglePause;
-$('#nextStep').onclick = () => { if (play) { play.paused = true; stepForward(); updateCaption(); } };
-$('#prevStep').onclick = () => { if (play) { play.paused = true; stepBack(); } };
-$('#stopPlay').onclick = () => { stopPlay(); backToSetup(); };
+$('#nextStep').onclick = () => {
+  if (!play) return state.phase === 'shown' ? nextShot() : show();
+  play.paused = true;
+  stepForward();
+  updateCaption();
+};
+$('#prevStep').onclick = () => {
+  if (!play) return undoShot();
+  play.paused = true;
+  stepBack();
+};
+$('#resetBtn').onclick = resetAll;
 
 // Camera presets, eased.
 for (const b of document.querySelectorAll('[data-cam]')) {

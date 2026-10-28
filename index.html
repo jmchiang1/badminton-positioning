@@ -15,13 +15,13 @@
         <canvas id="court" role="img" aria-label="3D badminton court with draggable players, shuttle and shot target"></canvas>
         <div class="hint" id="hint">Drag players, the shuttle and the yellow target ring. They snap to the common spots. Drag empty space to orbit, pinch or scroll to zoom.</div>
         <div class="notes" id="notes" aria-live="polite"></div>
-        <div class="playbar" id="playbar" hidden>
+        <div class="playbar" id="playbar">
           <p class="caption"><span id="stepCount"></span><b id="stepNote"></b></p>
           <div class="playctl">
-            <button id="prevStep" aria-label="Previous shot">&#8249;</button>
-            <button id="playPause" class="pp" aria-label="Pause">Pause</button>
-            <button id="nextStep" aria-label="Next shot">&#8250;</button>
-            <button id="stopPlay" aria-label="Stop the replay">Stop</button>
+            <button id="prevStep" aria-label="Previous shot" title="Previous shot">&#8249;</button>
+            <button id="playPause" class="pp" aria-label="Pause" hidden>Pause</button>
+            <button id="nextStep" aria-label="Next shot from here" title="Next shot from here">&#8250;</button>
+            <button id="resetBtn" class="txt" aria-label="Reset the court" title="Reset the court">Reset</button>
           </div>
         </div>
         <nav class="cams" aria-label="Camera">
@@ -58,7 +58,7 @@
           <div class="seg small" id="directions"></div>
         </section>
 
-        <section class="step serve" id="serveBox" hidden>
+        <section class="step serve" id="serveBox">
           <h2><span>&#8226;</span> Serving score</h2>
           <div class="seg small" id="score">
             <button data-score="even" class="on">Even (right court)</button>
@@ -74,10 +74,6 @@
 
         <div class="actions">
           <button class="primary" id="show">Show where to go</button>
-          <div class="row">
-            <button class="ghost" id="next" disabled>Next shot from here</button>
-            <button class="ghost" id="reset">Reset</button>
-          </div>
         </div>
 
         <section class="step plays">
