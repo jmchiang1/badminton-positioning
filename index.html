@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Courtwise</title>
+    <meta name="description" content="Place players and the shuttle on a 3D badminton court, pick a shot, and see where everyone should move." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <main class="app">
+      <section class="stage" aria-label="3D badminton court">
+        <canvas id="court" role="img" aria-label="3D badminton court with draggable players, shuttle and shot target"></canvas>
+        <div class="hint" id="hint">Drag players, the shuttle (white disc) and the target (yellow ring). Drag empty space to orbit, pinch or scroll to zoom.</div>
+        <nav class="cams" aria-label="Camera">
+          <button data-cam="blue" class="on">Blue end</button>
+          <button data-cam="orange">Orange end</button>
+          <button data-cam="top">Top</button>
+          <button data-cam="side">Side</button>
+        </nav>
+      </section>
+
+      <aside class="panel" aria-label="Controls">
+        <header class="brand">
+          <h1>Courtwise</h1>
+          <p>Set the rally, then see where to go.</p>
+        </header>
+
+        <div class="seg" role="radiogroup" aria-label="Game">
+          <button role="radio" data-mode="singles">Singles</button>
+          <button role="radio" data-mode="doubles" class="on">Doubles</button>
+        </div>
+
+        <section class="step">
+          <h2><span>1</span> Who's hitting?</h2>
+          <div class="chips" id="hitters"></div>
+          <p class="sub">Or drag the shuttle next to a player.</p>
+        </section>
+
+        <section class="step">
+          <h2><span>2</span> Shot</h2>
+          <div class="shots" id="shots"></div>
+        </section>
+
+        <section class="step">
+          <h2><span>3</span> Direction</h2>
+          <div class="seg small" id="directions"></div>
+          <p class="sub">Fine-tune by dragging the yellow target ring.</p>
+        </section>
+
+        <section class="step serve" id="serveBox" hidden>
+          <h2><span>&#8226;</span> Serving score</h2>
+          <div class="seg small" id="score">
+            <button data-score="even" class="on">Even (right court)</button>
+            <button data-score="odd">Odd (left court)</button>
+          </div>
+          <button class="ghost" id="setupServe">Place players for this serve</button>
+        </section>
+
+        <div class="actions">
+          <button class="primary" id="show">Show where to go</button>
+          <div class="row">
+            <button class="ghost" id="next" disabled>Next shot from here</button>
+            <button class="ghost" id="reset">Reset</button>
+          </div>
+        </div>
+
+        <section class="result" id="result" aria-live="polite"></section>
+
+        <footer class="foot">
+          <button class="link" id="openRules">The rules this uses</button>
+        </footer>
+      </aside>
+    </main>
+
+    <dialog id="rules">
+      <article>
+        <header><h2>The rules Courtwise uses</h2><button class="close" id="closeRules" aria-label="Close">&times;</button></header>
+        <div id="rulesBody"></div>
+      </article>
+    </dialog>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
