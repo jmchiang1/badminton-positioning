@@ -2,11 +2,13 @@ import * as THREE from 'three';
 import './styles.css';
 import {
   createScene, createPlayer, createShuttle, createTarget, createArrow, createGhost,
-  createPath, flightCurve, COLORS, CAMERAS,
+  createPath, createSnapMarker, textSprite, flightCurve, COLORS, CAMERAS,
 } from './scene.js';
 import {
-  SHOTS, SHOT_ORDER, TEAMS, recommend, defaultTarget, checkShot, serveSetup, teamOf, depthOf,
+  SHOTS, SHOT_ORDER, TEAMS, recommend, defaultTarget, checkShot, serveSetup, teamOf, depthOf, zOf,
 } from './rules.js';
+import { shuttleSnaps, serveTargetSnaps, playerSnaps, nearest } from './snaps.js';
+import { PLAYS } from './plays.js';
 import { RULES_DOC } from './rulesDoc.js';
 
 const $ = (s) => document.querySelector(s);
@@ -16,8 +18,8 @@ const { renderer, scene, camera, controls, dragPlane, resize } = createScene(can
 // ------------------------------------------------------------------ state
 
 const START = {
-  doubles: { A1: { x: 1.1, z: 5.3 }, A2: { x: -0.6, z: 2.2 }, B1: { x: -1.3, z: -3.3 }, B2: { x: 1.3, z: -3.3 } },
-  singles: { A1: { x: 0.9, z: 5.5 }, B1: { x: 0, z: -3.6 } },
+  doubles: { A1: { x: 2.2, z: 5.9 }, A2: { x: 0, z: 2.1 }, B1: { x: -1.3, z: -3.3 }, B2: { x: 1.3, z: -3.3 } },
+  singles: { A1: { x: 1.8, z: 5.9 }, B1: { x: 0, z: -3.6 } },
 };
 const ALL_IDS = ['A1', 'A2', 'B1', 'B2'];
 const NAMES = { A1: 'Blue 1', A2: 'Blue 2', B1: 'Orange 1', B2: 'Orange 2' };
@@ -32,17 +34,20 @@ const state = {
   target: { x: 0, z: 0 },
   targetManual: false,
   score: 'even',
+  snap: true,
   phase: 'setup',
   result: null,
 };
 
 const activeIds = () => (state.mode === 'doubles' ? [...ALL_IDS] : ['A1', 'B1']);
+const lim = (v, a) => Math.max(-a, Math.min(a, v));
 
 // ------------------------------------------------------------------ objects
 
 const players = {};
 for (const id of ALL_IDS) {
   const p = createPlayer(id);
+  p.walk = 0; // footwork cycle phase
   players[id] = p;
   scene.add(p.group);
 }
@@ -53,22 +58,38 @@ scene.add(target.group);
 let pathMesh = null;
 const overlay = new THREE.Group(); // ghosts + arrows
 scene.add(overlay);
+const tags = {}; // role tags above players
+
+const markers = Array.from({ length: 9 }, () => {
+  const m = createSnapMarker();
+  m.visible = false;
+  scene.add(m);
+  return m;
+});
 
 // ------------------------------------------------------------------ helpers
 
+// The shuttle sits a little to the hitter's right and in front of them.
+const OFFSET = { side: 0.42, fwd: 0.35 };
 function contactFor(id) {
   const p = state.setup[id];
   const sign = TEAMS[teamOf(id)].sign;
-  // a little to the player's right and in front of them
-  return { x: p.x + 0.42 * sign, z: p.z - 0.35 * sign };
+  return { x: p.x + OFFSET.side * sign, z: p.z - OFFSET.fwd * sign };
+}
+// Where the hitter stands to play a shuttle at contact point c.
+function standFor(id, c) {
+  const team = teamOf(id);
+  const sign = TEAMS[team].sign;
+  const d = Math.max(0.5, Math.min(7.0, depthOf(team, c.z) + OFFSET.fwd));
+  return { x: lim(c.x - OFFSET.side * sign, 3.3), z: zOf(team, d) };
 }
 
-function nearestOnSide(pt) {
+function nearestOnSide(pt, positions = state.setup) {
   const side = pt.z >= 0 ? 'A' : 'B';
   let best = null;
   for (const id of activeIds()) {
     if (teamOf(id) !== side) continue;
-    const p = state.setup[id];
+    const p = positions[id];
     const d = (p.x - pt.x) ** 2 + (p.z - pt.z) ** 2;
     if (!best || d < best.d) best = { id, d };
   }
@@ -79,8 +100,22 @@ function refreshTarget() {
   if (state.targetManual) return;
   state.target = defaultTarget({
     mode: state.mode, shot: state.shot, contact: state.contact,
-    hitterTeam: teamOf(state.hitterId), direction: state.direction,
+    hitterTeam: teamOf(state.hitterId), direction: state.direction, server: state.setup[state.hitterId],
   });
+}
+
+// Face a point. Players never turn their back on the net: if the point is on their
+// own side (their partner hitting), they look across at the opponents instead.
+function face(id, pt) {
+  const team = teamOf(id);
+  const g = players[id].group.position;
+  let look = pt;
+  if (Math.sign(pt.z) === TEAMS[team].sign && id !== state.hitterId) look = { x: pt.x * 0.5, z: zOf(team === 'A' ? 'B' : 'A', 3.5) };
+  if (id === state.hitterId && state.phase === 'setup') look = state.target;
+  const dx = look.x - g.x;
+  const dz = look.z - g.z;
+  if (Math.hypot(dx, dz) < 0.1) return;
+  players[id].body.rotation.y = Math.atan2(-dx, -dz);
 }
 
 function placeAll() {
@@ -93,12 +128,13 @@ function placeAll() {
   }
   const h = SHOTS[state.shot].contact;
   shuttle.group.position.set(state.contact.x, h, state.contact.z);
-  shuttle.model.rotation.set(0, 0, 0);
+  shuttle.model.quaternion.identity();
   shuttle.handle.position.set(state.contact.x, 0.011, state.contact.z);
   shuttle.stem.position.set(state.contact.x, 0, state.contact.z);
   shuttle.stem.scale.y = h;
   shuttle.stem.computeLineDistances();
   target.group.position.set(state.target.x, 0, state.target.z);
+  for (const id of activeIds()) face(id, state.contact);
   drawPath();
 }
 
@@ -124,6 +160,12 @@ function clearOverlay() {
     overlay.remove(c);
     c.traverse((o) => o.geometry?.dispose());
   }
+  for (const id of Object.keys(tags)) {
+    players[id].group.remove(tags[id]);
+    tags[id].material.map.dispose();
+    delete tags[id];
+  }
+  $('#notes').innerHTML = '';
 }
 
 // ------------------------------------------------------------------ tweens
@@ -136,6 +178,23 @@ function tween(dur, update, delay = 0) {
   });
 }
 
+// Move a player to `to`, with footwork, over `dur` ms.
+function walk(id, to, dur = 1300, delay = 150) {
+  const p = players[id];
+  const from = { x: p.group.position.x, z: p.group.position.z };
+  const dist = Math.hypot(to.x - from.x, to.z - from.z);
+  if (dist < 0.05) return Promise.resolve();
+  let last = 0;
+  return tween(dur, (t) => {
+    const e = ease(t);
+    p.group.position.set(from.x + (to.x - from.x) * e, 0, from.z + (to.z - from.z) * e);
+    p.walk += (e - last) * dist * 7; // about one stride cycle per 0.9 m
+    last = e;
+    const amount = Math.min(1, dist / 1.2) * Math.sin(Math.PI * t);
+    p.pose(p.walk, amount);
+  }, delay).then(() => p.pose(0, 0));
+}
+
 function tick(now) {
   for (let i = tweens.length - 1; i >= 0; i--) {
     const tw = tweens[i];
@@ -146,10 +205,10 @@ function tick(now) {
       tw.resolve();
     }
   }
-  if (highlightId) {
-    const ring = players[highlightId].ring;
-    const k = 1 + 0.18 * Math.sin(now / 120);
-    ring.scale.set(k, k, k);
+  if (animating) {
+    // Everyone watches the shuttle in flight.
+    const sp = shuttle.group.position;
+    for (const id of activeIds()) face(id, { x: sp.x, z: sp.z });
   }
   resize();
   controls.update();
@@ -169,16 +228,16 @@ async function show() {
     mode: state.mode, shot: state.shot, players: playersArr,
     hitterId: state.hitterId, target: state.target, contact: state.contact,
   });
-  result.notes = checkShot({
+  const notes = checkShot({
     mode: state.mode, shot: state.shot, contact: state.contact,
-    hitterTeam: teamOf(state.hitterId), target: state.target, score: state.score,
-  });
+    hitterTeam: teamOf(state.hitterId), target: state.target, score: state.score, server: state.setup[state.hitterId],
+  }).filter((n) => n.level === 'warn');
   state.result = result;
   state.phase = 'shown';
-  renderResult();
   syncButtons();
 
   clearOverlay();
+  $('#notes').innerHTML = notes.map((n) => `<p>${esc(n.text)}</p>`).join('');
   for (const id of activeIds()) {
     const from = state.setup[id];
     const to = result.moves[id];
@@ -194,32 +253,48 @@ async function show() {
   const dir = new THREE.Vector3();
   const down = new THREE.Vector3(0, -1, 0);
   const shuttleFlight = tween(flight, (t) => {
-    const p = curve.getPoint(t);
-    shuttle.group.position.copy(p);
+    shuttle.group.position.copy(curve.getPoint(t));
     curve.getTangent(Math.min(t, 0.999), dir);
     shuttle.model.quaternion.setFromUnitVectors(down, dir.normalize());
   });
-  const moves = activeIds().map((id) => {
-    const from = { ...state.setup[id] };
-    const to = result.moves[id];
-    if (!to) return null;
-    const g = players[id].group;
-    return tween(1300, (t) => {
-      const e = ease(t);
-      g.position.set(from.x + (to.x - from.x) * e, 0, from.z + (to.z - from.z) * e);
-    }, 150);
-  });
+  const moves = activeIds().map((id) => (result.moves[id] ? walk(id, result.moves[id]) : null));
   await Promise.all([shuttleFlight, ...moves]);
   animating = false;
+
+  for (const id of activeIds()) {
+    face(id, state.target);
+    const m = result.moves[id];
+    if (!m) continue;
+    const tag = textSprite(m.role);
+    tag.position.y = 2.32;
+    players[id].group.add(tag);
+    tags[id] = tag;
+  }
 }
 
 function backToSetup() {
   state.phase = 'setup';
   state.result = null;
   clearOverlay();
+  for (const id of ALL_IDS) players[id].pose(0, 0);
   placeAll();
-  renderResult();
   syncButtons();
+}
+
+// Commit the shown positions and hand the shuttle to whoever receives it.
+function advance(nextShotKey) {
+  for (const id of activeIds()) {
+    const m = state.result?.moves[id];
+    if (m) state.setup[id] = { x: m.x, z: m.z };
+  }
+  const arrive = { ...state.target };
+  const recvTeam = arrive.z >= 0 ? 'A' : 'B';
+  arrive.x = lim(arrive.x, 3.0);
+  arrive.z = zOf(recvTeam, Math.max(0.6, Math.min(6.6, depthOf(recvTeam, arrive.z))));
+  state.contact = arrive;
+  state.hitterId = nearestOnSide(arrive);
+  state.shot = nextShotKey;
+  state.targetManual = false;
 }
 
 const NEXT_SHOT = { up: 'smash', attack: 'block', net: 'lift', flat: 'drive' };
@@ -227,28 +302,17 @@ const NEXT_SHOT = { up: 'smash', attack: 'block', net: 'lift', flat: 'drive' };
 function nextShot() {
   if (state.phase !== 'shown' || !state.result) return;
   const s = SHOTS[state.shot];
-  for (const id of activeIds()) {
-    const m = state.result.moves[id];
-    if (m) state.setup[id] = { x: m.x, z: m.z };
-  }
-  // The receiver nearest the shuttle plays the next shot from where it arrived.
-  const arrive = { ...state.target };
-  const recvTeam = arrive.z >= 0 ? 'A' : 'B';
-  const lim = (v, a) => Math.max(-a, Math.min(a, v));
-  arrive.x = lim(arrive.x, 3.0);
-  arrive.z = recvTeam === 'A' ? lim(Math.max(arrive.z, 0.6), 6.6) : lim(Math.min(arrive.z, -0.6), 6.6);
-  state.contact = arrive;
-  state.hitterId = nearestOnSide(arrive);
-  state.shot = state.shot === 'drop' || state.shot === 'net' ? 'lift' : NEXT_SHOT[s.cls];
-  if (state.shot === 'block' && state.mode === 'singles') state.shot = 'lift';
+  let next = state.shot === 'drop' || state.shot === 'net' ? 'lift' : NEXT_SHOT[s.cls];
+  if (next === 'block' && state.mode === 'singles') next = 'lift';
+  advance(next);
   state.direction = 'straight';
-  state.targetManual = false;
   refreshTarget();
   backToSetup();
   renderControls();
 }
 
 function resetAll() {
+  stopPlay();
   state.setup = structuredClone(START[state.mode]);
   state.hitterId = 'A1';
   state.shot = 'smash';
@@ -265,8 +329,7 @@ function applyServeSetup() {
   const pos = serveSetup({ mode: state.mode, servingTeam: team, score: state.score });
   Object.assign(state.setup, pos);
   state.hitterId = `${team}1`;
-  state.contact = { ...pos[`${team}1`] };
-  state.contact.z -= 0.2 * TEAMS[team].sign;
+  state.contact = contactFor(`${team}1`);
   state.targetManual = false;
   if (!['t', 'body', 'wide'].includes(state.direction)) state.direction = 't';
   refreshTarget();
@@ -274,7 +337,154 @@ function applyServeSetup() {
   renderControls();
 }
 
-// ------------------------------------------------------------------ drag
+// ------------------------------------------------------------------ plays
+
+let play = null; // { def, i, paused, snapshots, timer }
+
+function snapshot() {
+  return structuredClone({
+    setup: state.setup, hitterId: state.hitterId, contact: state.contact, shot: state.shot,
+    direction: state.direction, target: state.target, score: state.score,
+  });
+}
+function restore(snap) {
+  Object.assign(state, structuredClone(snap));
+  state.targetManual = true;
+}
+
+function startPlay(def) {
+  stopPlay();
+  if (state.mode !== def.mode) state.mode = def.mode;
+  state.setup = structuredClone(START[def.mode]);
+  if (def.start.serve) {
+    state.score = def.start.score;
+    state.hitterId = `${def.start.serve}1`;
+    Object.assign(state.setup, serveSetup({ mode: def.mode, servingTeam: def.start.serve, score: def.start.score }));
+  } else {
+    Object.assign(state.setup, structuredClone(def.start.setup));
+    state.hitterId = def.start.hitter;
+  }
+  state.contact = contactFor(state.hitterId);
+  play = { def, i: 0, paused: false, snapshots: [] };
+  backToSetup();
+  renderControls();
+  $('#playbar').hidden = false;
+  renderPlays();
+  runStep();
+}
+
+function aimStep(step) {
+  state.shot = step.shot;
+  state.direction = step.dir;
+  state.targetManual = false;
+  if (step.to) {
+    const recv = teamOf(state.hitterId) === 'A' ? 'B' : 'A';
+    state.target = { x: step.to.x, z: zOf(recv, step.to.d) };
+    state.targetManual = true;
+  } else {
+    refreshTarget();
+  }
+}
+
+async function runStep() {
+  if (!play) return;
+  const { def } = play;
+  const step = def.steps[play.i];
+  play.snapshots[play.i] = snapshot();
+  aimStep(step);
+  backToSetup();
+  renderControls();
+  updateCaption();
+  const token = (play.token = Symbol('step'));
+  await new Promise((r) => setTimeout(r, 350));
+  if (!play || play.token !== token) return;
+  await show();
+  if (!play || play.token !== token) return;
+  const queued = play.queued;
+  play.queued = null;
+  if (queued === 'next') stepForward();
+  else if (queued === 'prev') stepBack();
+  else schedule();
+}
+
+function schedule() {
+  clearTimeout(play.timer);
+  if (play.paused) return;
+  play.timer = setTimeout(() => stepForward(), 2200);
+}
+
+function stepForward() {
+  if (!play) return;
+  if (animating) {
+    play.queued = 'next';
+    return;
+  }
+  clearTimeout(play.timer);
+  if (play.i >= play.def.steps.length - 1) {
+    play.paused = true;
+    updateCaption(true);
+    return;
+  }
+  advance(play.def.steps[play.i + 1].shot);
+  play.i += 1;
+  runStep();
+}
+
+function stepBack() {
+  if (!play || play.i === 0) return;
+  if (animating) {
+    play.queued = 'prev';
+    return;
+  }
+  clearTimeout(play.timer);
+  play.i -= 1;
+  restore(play.snapshots[play.i]);
+  runStep();
+}
+
+function togglePause() {
+  if (!play) return;
+  if (play.paused && play.i >= play.def.steps.length - 1) {
+    startPlay(play.def); // replay from the start
+    return;
+  }
+  play.paused = !play.paused;
+  updateCaption();
+  if (!play.paused && !animating) stepForward();
+}
+
+function stopPlay() {
+  if (!play) return;
+  clearTimeout(play.timer);
+  play = null;
+  $('#playbar').hidden = true;
+  renderPlays();
+}
+
+function updateCaption(done = false) {
+  if (!play) return;
+  const { def, i } = play;
+  $('#stepCount').innerHTML = `<i class="ptitle">${esc(def.title)} · </i>Shot ${i + 1} of ${def.steps.length}`;
+  $('#stepNote').textContent = def.steps[i].note;
+  const pp = $('#playPause');
+  const ended = done || (play.paused && i >= def.steps.length - 1);
+  pp.textContent = ended ? 'Replay' : play.paused ? 'Play' : 'Pause';
+  pp.setAttribute('aria-label', pp.textContent);
+}
+
+function renderPlays() {
+  const el = $('#plays');
+  el.innerHTML = '';
+  for (const def of PLAYS) {
+    const b = document.createElement('button');
+    b.className = `play${play?.def.id === def.id ? ' on' : ''}`;
+    b.innerHTML = `<em>${def.mode}</em><b>${esc(def.title)}</b><span>${esc(def.blurb)}</span>`;
+    b.onclick = () => startPlay(def);
+    el.append(b);
+  }
+}
+
+// ------------------------------------------------------------------ drag + snap
 
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
@@ -291,13 +501,37 @@ function floorPoint() {
   return raycaster.ray.intersectPlane(dragPlane, v) ? v : null;
 }
 
+function snapSet(id, pt) {
+  if (id === 'target') {
+    const recv = teamOf(state.hitterId) === 'A' ? 'B' : 'A';
+    return SHOTS[state.shot].serve
+      ? serveTargetSnaps(state.mode, recv, state.setup[state.hitterId].x)
+      : shuttleSnaps(state.mode, recv);
+  }
+  if (id === 'shuttle') return shuttleSnaps(state.mode, pt.z >= 0 ? 'A' : 'B');
+  return playerSnaps(state.mode, teamOf(id));
+}
+
+function showMarkers(spots, active) {
+  markers.forEach((m, i) => {
+    const s = spots[i];
+    m.visible = !!s;
+    if (!s) return;
+    m.position.set(s.x, 0.014, s.z);
+    m.material.opacity = s === active ? 0.95 : 0.35;
+    m.scale.setScalar(s === active ? 1.35 : 1);
+  });
+}
+const hideMarkers = () => markers.forEach((m) => { m.visible = false; });
+
 canvas.addEventListener('pointerdown', (e) => {
   if (animating) return;
   pick(e);
   // Shuttle and target win over players, which stand close to them.
-  const hit = raycaster.intersectObjects([target.hit, shuttle.handle], false)[0]
+  const hit = raycaster.intersectObjects([target.hit, shuttle.handle, shuttle.grab], false)[0]
     ?? raycaster.intersectObjects(activeIds().map((id) => players[id].hit), false)[0];
   if (!hit) return;
+  stopPlay();
   if (state.phase === 'shown') backToSetup();
   drag = { id: hit.object.userData.dragId, moved: false, sx: e.clientX, sy: e.clientY };
   controls.enabled = false;
@@ -310,25 +544,39 @@ canvas.addEventListener('pointermove', (e) => {
   if (!drag.moved && Math.hypot(e.clientX - drag.sx, e.clientY - drag.sy) < 4) return;
   drag.moved = true;
   pick(e);
-  const p = floorPoint();
-  if (!p) return;
-  const lim = (v, a) => Math.max(-a, Math.min(a, v));
+  const raw = floorPoint();
+  if (!raw) return;
+  let p = { x: raw.x, z: raw.z };
+
   if (drag.id === 'target') {
     const hitSide = TEAMS[teamOf(state.hitterId)].sign;
-    state.target = { x: lim(p.x, 3.9), z: hitSide > 0 ? lim(Math.min(p.z, -0.2), 7.6) : lim(Math.max(p.z, 0.2), 7.6) };
+    p = { x: lim(p.x, 3.9), z: hitSide > 0 ? lim(Math.min(p.z, -0.2), 7.6) : lim(Math.max(p.z, 0.2), 7.6) };
+  } else if (drag.id === 'shuttle') {
+    p = { x: lim(p.x, 3.6), z: lim(p.z, 7.4) };
+    if (Math.abs(p.z) < 0.15) p.z = p.z < 0 ? -0.15 : 0.15;
+  } else {
+    const sign = TEAMS[teamOf(drag.id)].sign;
+    p = { x: lim(p.x, 3.6), z: lim(sign > 0 ? Math.max(p.z, 0.35) : Math.min(p.z, -0.35), 7.6) };
+  }
+  if (state.snap) {
+    const spots = snapSet(drag.id, p);
+    const s = nearest(spots, p);
+    showMarkers(spots, s);
+    p = { x: s.x, z: s.z };
+  }
+
+  if (drag.id === 'target') {
+    state.target = p;
     state.targetManual = true;
   } else if (drag.id === 'shuttle') {
-    state.contact = { x: lim(p.x, 3.6), z: lim(p.z, 7.4) };
-    if (Math.abs(state.contact.z) < 0.15) state.contact.z = state.contact.z < 0 ? -0.15 : 0.15;
+    state.contact = p;
     const prevTeam = teamOf(state.hitterId);
-    state.hitterId = nearestOnSide(state.contact);
+    state.hitterId = nearestOnSide(p);
     if (teamOf(state.hitterId) !== prevTeam) state.targetManual = false;
     refreshTarget();
     renderHitters();
   } else {
-    const sign = TEAMS[teamOf(drag.id)].sign;
-    const z = sign > 0 ? Math.max(p.z, 0.35) : Math.min(p.z, -0.35);
-    state.setup[drag.id] = { x: lim(p.x, 3.6), z: lim(z, 7.6) };
+    state.setup[drag.id] = p;
     if (drag.id === state.hitterId) {
       state.contact = contactFor(drag.id);
       refreshTarget();
@@ -339,11 +587,19 @@ canvas.addEventListener('pointermove', (e) => {
 
 function endDrag(e) {
   if (!drag) return;
-  // A tap on a player gives them the shuttle.
-  if (!drag.moved && ALL_IDS.includes(drag.id)) setHitter(drag.id);
+  const { id, moved } = drag;
   drag = null;
+  hideMarkers();
   controls.enabled = true;
   if (canvas.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
+  // A tap on a player gives them the shuttle.
+  if (!moved && ALL_IDS.includes(id)) setHitter(id);
+  // Dropping the shuttle: the hitter steps in behind it.
+  if (moved && id === 'shuttle') {
+    const h = state.hitterId;
+    state.setup[h] = standFor(h, state.contact);
+    walk(h, state.setup[h], 450, 0).then(() => face(h, state.target));
+  }
 }
 canvas.addEventListener('pointerup', endDrag);
 canvas.addEventListener('pointercancel', endDrag);
@@ -351,11 +607,12 @@ canvas.addEventListener('pointercancel', endDrag);
 // ------------------------------------------------------------------ UI
 
 function setHitter(id) {
+  stopPlay();
   if (state.phase === 'shown') backToSetup();
   const changedTeam = teamOf(id) !== teamOf(state.hitterId);
   state.hitterId = id;
   state.contact = contactFor(id);
-  if (changedTeam || !state.targetManual) state.targetManual = false;
+  if (changedTeam) state.targetManual = false;
   refreshTarget();
   placeAll();
   renderHitters();
@@ -383,6 +640,7 @@ function renderShots() {
     b.className = key === state.shot ? 'on' : '';
     b.setAttribute('aria-pressed', key === state.shot);
     b.onclick = () => {
+      stopPlay();
       const wasServe = SHOTS[state.shot].serve;
       state.shot = key;
       state.targetManual = false;
@@ -411,6 +669,7 @@ function renderDirections() {
     b.textContent = label;
     b.className = key === state.direction && !state.targetManual ? 'on' : '';
     b.onclick = () => {
+      stopPlay();
       state.direction = key;
       state.targetManual = false;
       refreshTarget();
@@ -438,44 +697,7 @@ function syncButtons() {
   $('#next').disabled = state.phase !== 'shown';
 }
 
-let highlightId = null;
-function setHighlight(id) {
-  if (highlightId) players[highlightId].ring.scale.set(1, 1, 1);
-  highlightId = id;
-}
-
 const esc = (t) => t.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
-
-function renderResult() {
-  const el = $('#result');
-  const r = state.result;
-  if (!r) {
-    el.innerHTML = '';
-    return;
-  }
-  const form = Object.entries(r.formation)
-    .map(([t, f]) => `<span>${t === 'A' ? 'Blue' : 'Orange'}: ${esc(f)}</span>`).join('');
-  const notes = (r.notes ?? []).map((n) => `<p class="note ${n.level}">${esc(n.text)}</p>`).join('');
-  // Hitting side first.
-  const H = teamOf(state.hitterId);
-  const order = activeIds().sort((a, b) => (teamOf(a) === H ? 0 : 1) - (teamOf(b) === H ? 0 : 1));
-  const cards = order.map((id) => {
-    const m = r.moves[id];
-    if (!m) return '';
-    const who = id === state.hitterId ? ' (hit the shot)' : '';
-    return `<article class="card ${teamOf(id)}" data-id="${id}">
-      <h3>${NAMES[id]}${who}<em>${esc(m.role)}</em></h3>
-      <p>${esc(m.text)}</p></article>`;
-  }).join('');
-  el.innerHTML = `<div class="summary">${esc(r.summary)}<div class="formation">${form}</div></div>${notes}${cards}`;
-  const panel = el.closest('.panel');
-  panel.scrollTo({ top: el.offsetTop - panel.offsetTop - 12, behavior: 'smooth' });
-  for (const c of el.querySelectorAll('.card')) {
-    c.addEventListener('mouseenter', () => setHighlight(c.dataset.id));
-    c.addEventListener('mouseleave', () => setHighlight(null));
-    c.addEventListener('click', () => setHighlight(highlightId === c.dataset.id ? null : c.dataset.id));
-  }
-}
 
 for (const b of document.querySelectorAll('[data-mode]')) {
   b.onclick = () => {
@@ -486,14 +708,24 @@ for (const b of document.querySelectorAll('[data-mode]')) {
 }
 for (const b of document.querySelectorAll('[data-score]')) {
   b.onclick = () => {
+    stopPlay();
     state.score = b.dataset.score;
     applyServeSetup();
   };
 }
-$('#setupServe').onclick = applyServeSetup;
-$('#show').onclick = () => (state.phase === 'shown' ? backToSetup() : show());
-$('#next').onclick = nextShot;
+$('#setupServe').onclick = () => { stopPlay(); applyServeSetup(); };
+$('#show').onclick = () => {
+  stopPlay();
+  if (state.phase === 'shown') backToSetup();
+  else show();
+};
+$('#next').onclick = () => { stopPlay(); nextShot(); };
 $('#reset').onclick = resetAll;
+$('#snap').onchange = (e) => { state.snap = e.target.checked; };
+$('#playPause').onclick = togglePause;
+$('#nextStep').onclick = () => { if (play) { play.paused = true; stepForward(); updateCaption(); } };
+$('#prevStep').onclick = () => { if (play) { play.paused = true; stepBack(); } };
+$('#stopPlay').onclick = () => { stopPlay(); backToSetup(); };
 
 // Camera presets, eased.
 for (const b of document.querySelectorAll('[data-cam]')) {
@@ -518,10 +750,11 @@ $('#openRules').onclick = () => $('#rules').showModal();
 $('#closeRules').onclick = () => $('#rules').close();
 
 // Debug handle for the console.
-window.__courtwise = { state, show, nextShot, resetAll, depthOf, camera, THREE };
+window.__courtwise = { state, show, nextShot, resetAll, startPlay, PLAYS, camera, THREE, get play() { return play; }, get animating() { return animating; } };
 
 // ------------------------------------------------------------------ boot
 
+renderPlays();
 resetAll();
 requestAnimationFrame(tick);
 setTimeout(() => $('#hint').classList.add('gone'), 9000);

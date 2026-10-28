@@ -159,36 +159,179 @@ function labelSprite(text, color) {
   return sprite;
 }
 
-// A simple player: body, head, racket, label, floor ring.
+// A jointed athlete in a ready stance. The group faces -z (toward the net for
+// team A). Joints rotate about x: positive swings a limb forward (toward -z).
+// `pose(phase, amount)` drives a footwork cycle; amount 0 is the still ready stance.
+const SKIN = 0xd9a27e;
+const SHORTS = 0x1f2937;
+const SHOE = 0xf3f4f6;
+const HAIR = 0x2b1d14;
+
+function capsule(r, len, color, y) {
+  const m = new THREE.Mesh(
+    new THREE.CapsuleGeometry(r, len, 6, 14),
+    new THREE.MeshStandardMaterial({ color, roughness: 0.65 }),
+  );
+  m.position.y = y;
+  m.castShadow = true;
+  return m;
+}
+
+function createRacket() {
+  const racket = new THREE.Group();
+  const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.014, 0.2, 10), new THREE.MeshStandardMaterial({ color: 0x111827 }));
+  grip.position.y = 0.06;
+  racket.add(grip);
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.005, 0.005, 0.26, 6), new THREE.MeshStandardMaterial({ color: 0x9ca3af, metalness: 0.6 }));
+  shaft.position.y = 0.29;
+  racket.add(shaft);
+  const frame = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.008, 6, 32), new THREE.MeshStandardMaterial({ color: 0xe11d48, roughness: 0.4 }));
+  frame.scale.set(0.82, 1.15, 1);
+  frame.position.y = 0.53;
+  racket.add(frame);
+  const strings = new THREE.Mesh(
+    new THREE.CircleGeometry(0.095, 24),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.25, side: THREE.DoubleSide }),
+  );
+  strings.scale.set(0.82, 1.15, 1);
+  strings.position.y = 0.53;
+  racket.add(strings);
+  racket.traverse((m) => { m.castShadow = true; });
+  return racket;
+}
+
 export function createPlayer(id) {
   const team = id[0];
   const color = COLORS[team];
   const group = new THREE.Group();
   group.userData = { id, kind: 'player' };
+  const shirt = color;
 
-  const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.5 });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 0.85, 6, 16), mat);
-  body.position.y = 0.22 + 0.85 / 2 + 0.05;
-  body.castShadow = true;
+  const body = new THREE.Group(); // rotates to face the shuttle
   group.add(body);
+  const hips = new THREE.Group();
+  body.add(hips);
+  const pelvis = capsule(0.13, 0.12, SHORTS, 0);
+  pelvis.rotation.z = Math.PI / 2;
+  pelvis.scale.set(1, 1, 0.8);
+  hips.add(pelvis);
 
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 20, 16), new THREE.MeshStandardMaterial({ color: 0xf1d3b3, roughness: 0.6 }));
-  head.position.y = 1.62;
+  const legs = [];
+  for (const s of [1, -1]) {
+    const hip = new THREE.Group();
+    hip.position.x = s * 0.1;
+    hips.add(hip);
+    const shortsLeg = new THREE.Mesh(new THREE.CylinderGeometry(0.092, 0.085, 0.24, 12), new THREE.MeshStandardMaterial({ color: SHORTS, roughness: 0.8 }));
+    shortsLeg.position.y = -0.11;
+    shortsLeg.castShadow = true;
+    hip.add(shortsLeg);
+    hip.add(capsule(0.068, 0.3, SKIN, -0.22));
+    const knee = new THREE.Group();
+    knee.position.y = -0.43;
+    hip.add(knee);
+    knee.add(capsule(0.056, 0.3, SKIN, -0.18));
+    const sock = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.048, 0.12, 10), new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    sock.position.y = -0.36;
+    knee.add(sock);
+    const ankle = new THREE.Group();
+    ankle.position.y = -0.42;
+    knee.add(ankle);
+    const shoe = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.075, 0.27), new THREE.MeshStandardMaterial({ color: SHOE, roughness: 0.5 }));
+    shoe.position.set(0, -0.035, -0.06);
+    shoe.castShadow = true;
+    ankle.add(shoe);
+    const sole = new THREE.Mesh(new THREE.BoxGeometry(0.115, 0.02, 0.275), new THREE.MeshStandardMaterial({ color: 0x6b7280 }));
+    sole.position.set(0, -0.07, -0.06);
+    ankle.add(sole);
+    legs.push({ hip, knee, ankle, s });
+  }
+
+  const torso = new THREE.Group();
+  hips.add(torso);
+  const chest = new THREE.Mesh(new THREE.CylinderGeometry(0.19, 0.145, 0.5, 16), new THREE.MeshStandardMaterial({ color: shirt, roughness: 0.6 }));
+  chest.scale.z = 0.62;
+  chest.position.y = 0.3;
+  chest.castShadow = true;
+  torso.add(chest);
+  const shoulders = capsule(0.075, 0.3, shirt, 0.52);
+  shoulders.rotation.z = Math.PI / 2;
+  shoulders.scale.set(1, 1, 0.8);
+  torso.add(shoulders);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.1, 10), new THREE.MeshStandardMaterial({ color: SKIN }));
+  neck.position.y = 0.62;
+  torso.add(neck);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.105, 24, 18), new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.6 }));
+  head.scale.set(0.9, 1.08, 0.97);
+  head.position.y = 0.77;
   head.castShadow = true;
-  group.add(head);
+  torso.add(head);
+  const hair = new THREE.Mesh(
+    new THREE.SphereGeometry(0.11, 24, 12, 0, Math.PI * 2, 0, Math.PI * 0.55),
+    new THREE.MeshStandardMaterial({ color: HAIR, roughness: 0.9 }),
+  );
+  hair.scale.set(0.92, 1.05, 1.0);
+  hair.position.set(0, 0.785, 0.008);
+  hair.rotation.x = 0.25;
+  torso.add(hair);
 
-  // Racket on the right hand. The group faces -z (toward the net for team A).
-  const racket = new THREE.Group();
-  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.35, 8), new THREE.MeshStandardMaterial({ color: 0x222222 }));
-  handle.position.y = 0.17;
-  racket.add(handle);
-  const frame = new THREE.Mesh(new THREE.TorusGeometry(0.11, 0.008, 6, 24), new THREE.MeshStandardMaterial({ color: 0xe5e7eb }));
-  frame.scale.set(0.85, 1.15, 1);
-  frame.position.y = 0.47;
-  racket.add(frame);
-  racket.position.set(0.32, 1.05, -0.05);
-  racket.rotation.z = -0.35;
-  group.add(racket);
+  const arms = [];
+  for (const s of [1, -1]) {
+    const shoulder = new THREE.Group();
+    shoulder.position.set(s * 0.22, 0.52, 0);
+    torso.add(shoulder);
+    shoulder.add(capsule(0.058, 0.07, shirt, -0.05)); // sleeve
+    shoulder.add(capsule(0.045, 0.2, SKIN, -0.15));
+    const elbow = new THREE.Group();
+    elbow.position.y = -0.29;
+    shoulder.add(elbow);
+    elbow.add(capsule(0.04, 0.19, SKIN, -0.13));
+    const hand = new THREE.Mesh(new THREE.SphereGeometry(0.045, 12, 10), new THREE.MeshStandardMaterial({ color: SKIN }));
+    hand.position.y = -0.27;
+    elbow.add(hand);
+    let racket = null;
+    if (s === 1) {
+      racket = createRacket();
+      racket.position.y = -0.27;
+      elbow.add(racket);
+    }
+    arms.push({ shoulder, elbow, racket, s });
+  }
+
+  // Thigh 0.43 m, shin 0.42 m, ankle to floor 0.075 m.
+  const reach = (a, b) => 0.43 * Math.cos(a) + 0.42 * Math.cos(a - b) + 0.075;
+
+  function pose(phase = 0, amount = 0) {
+    const sw = Math.sin(phase) * amount;
+    let lowest = 0;
+    for (const leg of legs) {
+      const k = leg.s === 1 ? sw : -sw;
+      const a = 0.38 + 0.5 * k; // hip flexion
+      const b = 0.75 + 0.45 * Math.max(0, -Math.cos(phase + (leg.s === 1 ? 0 : Math.PI))) * amount; // knee bend
+      leg.hip.rotation.x = a;
+      leg.hip.rotation.z = leg.s * 0.12; // feet a little wider than the hips
+      leg.knee.rotation.x = -b;
+      leg.ankle.rotation.x = b - a;
+      leg.ankle.rotation.z = -leg.s * 0.12;
+      lowest = Math.max(lowest, reach(a, b));
+    }
+    hips.position.y = lowest * Math.cos(0.12);
+    hips.position.y += Math.abs(Math.sin(phase)) * 0.02 * amount;
+    torso.rotation.x = -0.22 - 0.06 * amount; // lean forward
+    for (const arm of arms) {
+      const k = arm.s === 1 ? -sw : sw;
+      if (arm.s === 1) {
+        // racket arm: up in front, racket head up
+        arm.shoulder.rotation.set(0.85 + 0.15 * k, 0, 0.55);
+        arm.elbow.rotation.set(1.25, 0, 0);
+        arm.racket.rotation.set(-(0.85 + 0.15 * k + 1.25) + 0.15 - torso.rotation.x, 0, -0.35);
+      } else {
+        // balance arm: forward, relaxed
+        arm.shoulder.rotation.set(0.55 + 0.25 * k, 0, -0.35);
+        arm.elbow.rotation.set(0.9, 0, 0);
+      }
+    }
+  }
+  pose();
 
   const ring = new THREE.Mesh(
     new THREE.RingGeometry(0.34, 0.42, 40),
@@ -199,17 +342,56 @@ export function createPlayer(id) {
   group.add(ring);
 
   // Larger invisible hit target makes dragging easy on touch screens.
-  const hit = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.45, 2, 12), new THREE.MeshBasicMaterial({ visible: false }));
-  hit.position.y = 1;
+  const hit = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.42, 1.9, 12), new THREE.MeshBasicMaterial({ visible: false }));
+  hit.position.y = 0.95;
   hit.userData = { dragId: id };
   group.add(hit);
 
   const label = labelSprite(id[1], team === 'A' ? '#3b82f6' : '#f97316');
-  label.position.y = 2.05;
+  label.scale.set(0.34, 0.34, 1);
+  label.position.y = 2.0;
   group.add(label);
 
-  group.rotation.y = team === 'A' ? 0 : Math.PI;
-  return { group, ring, hit, mat };
+  body.rotation.y = team === 'A' ? 0 : Math.PI;
+  return { group, body, ring, hit, pose, team };
+}
+
+// Floating text tag, e.g. a player's role.
+export function textSprite(text, color = '#0e151b', bg = 'rgba(255,255,255,0.92)') {
+  const c = document.createElement('canvas');
+  const g = c.getContext('2d');
+  const font = '600 44px Inter, system-ui, sans-serif';
+  g.font = font;
+  const w = Math.ceil(g.measureText(text).width) + 48;
+  c.width = w;
+  c.height = 76;
+  g.font = font;
+  g.fillStyle = bg;
+  g.beginPath();
+  g.roundRect(0, 0, w, 76, 38);
+  g.fill();
+  g.fillStyle = color;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, w / 2, 40);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false }));
+  const h = 0.3;
+  sprite.scale.set((h * w) / 76, h, 1);
+  sprite.renderOrder = 11;
+  return sprite;
+}
+
+// Faint floor markers for snap spots.
+export function createSnapMarker() {
+  const m = new THREE.Mesh(
+    new THREE.RingGeometry(0.16, 0.21, 32),
+    new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  m.rotation.x = -Math.PI / 2;
+  m.position.y = 0.014;
+  return m;
 }
 
 // Shuttle: cork + skirt, plus a floor handle and a stem so its spot is readable.
@@ -227,6 +409,10 @@ export function createShuttle() {
   s.add(skirt);
   s.traverse((m) => { m.castShadow = true; });
   group.add(s);
+  // Invisible sphere around the shuttle so it can be grabbed in the air too.
+  const grab = new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 8), new THREE.MeshBasicMaterial({ visible: false }));
+  grab.userData = { dragId: 'shuttle' };
+  group.add(grab);
 
   const handle = new THREE.Mesh(
     new THREE.CircleGeometry(0.28, 32),
@@ -236,7 +422,7 @@ export function createShuttle() {
   handle.userData = { dragId: 'shuttle' };
   const stemMat = new THREE.LineDashedMaterial({ color: 0xffffff, dashSize: 0.08, gapSize: 0.06, transparent: true, opacity: 0.7 });
   const stem = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]), stemMat);
-  return { group, model: s, handle, stem };
+  return { group, model: s, handle, stem, grab };
 }
 
 export function createTarget() {

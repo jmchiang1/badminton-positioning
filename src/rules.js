@@ -84,7 +84,7 @@ function assign(players, spots) {
 // Default target for a shot played by `hitter` from `contact` in a direction.
 // Straight keeps x, cross mirrors it, middle aims at the centre line.
 // Serves must go diagonally into the opposite service court.
-export function defaultTarget({ mode, shot, contact, hitterTeam, direction }) {
+export function defaultTarget({ mode, shot, contact, hitterTeam, direction, server }) {
   const s = SHOTS[shot];
   const recv = sideOf(hitterTeam);
   const hw = halfWidth(mode) - 0.5;
@@ -92,7 +92,7 @@ export function defaultTarget({ mode, shot, contact, hitterTeam, direction }) {
   let depth = s.depth;
   if (s.serve) {
     // Diagonal box: opposite sign of x from the server.
-    const boxSign = contact.x >= 0 ? -1 : 1;
+    const boxSign = (server ?? contact).x >= 0 ? -1 : 1;
     const boxHw = halfWidth(mode);
     const at = { t: 0.25, body: boxHw * 0.5, wide: boxHw - 0.3 }[direction] ?? boxHw * 0.5;
     x = boxSign * at;
@@ -108,7 +108,8 @@ export function defaultTarget({ mode, shot, contact, hitterTeam, direction }) {
 
 // ------------------------------------------------------------- legality notes
 
-export function checkShot({ mode, shot, contact, hitterTeam, target, score }) {
+// `server` is where the server stands (the Laws are about their feet, not the shuttle).
+export function checkShot({ mode, shot, contact, hitterTeam, target, score, server }) {
   const s = SHOTS[shot];
   const notes = [];
   const recv = sideOf(hitterTeam);
@@ -120,16 +121,17 @@ export function checkShot({ mode, shot, contact, hitterTeam, target, score }) {
 
   if (s.serve) {
     const even = score === 'even';
+    const stand = server ?? contact;
     // Server's right service court is +x for team A, -x for team B.
-    const serverRight = TEAMS[hitterTeam].sign > 0 ? contact.x > 0 : contact.x < 0;
+    const serverRight = TEAMS[hitterTeam].sign > 0 ? stand.x > 0 : stand.x < 0;
     if (serverRight !== even) {
       notes.push({
         level: 'warn',
         text: `With an ${score} score the server must serve from their ${even ? 'right' : 'left'} service court (Law 10/11).`,
       });
     }
-    if (cd < COURT.shortService) notes.push({ level: 'warn', text: 'The server must stand behind the short service line.' });
-    if (Math.sign(target.x) === Math.sign(contact.x) && Math.abs(target.x) > 0.05) {
+    if (depthOf(hitterTeam, stand.z) < COURT.shortService) notes.push({ level: 'warn', text: 'The server must stand behind the short service line.' });
+    if (Math.sign(target.x) === Math.sign(stand.x) && Math.abs(target.x) > 0.05) {
       notes.push({ level: 'warn', text: 'A serve must land in the service court diagonally opposite.' });
     }
     const longLine = mode === 'doubles' ? COURT.doublesLongService : COURT.halfLength;
