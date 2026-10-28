@@ -767,22 +767,25 @@ $('#prevStep').onclick = () => {
 };
 $('#resetBtn').onclick = resetAll;
 
-// Camera presets, eased.
-for (const b of document.querySelectorAll('[data-cam]')) {
-  b.onclick = () => {
-    for (const o of document.querySelectorAll('[data-cam]')) o.classList.toggle('on', o === b);
-    const c = CAMERAS[b.dataset.cam];
-    const p0 = camera.position.clone();
-    const t0 = controls.target.clone();
-    const p1 = new THREE.Vector3(...c.pos);
-    const t1 = new THREE.Vector3(...c.target);
-    tween(700, (t) => {
-      const e = ease(t);
-      camera.position.lerpVectors(p0, p1, e);
-      controls.target.lerpVectors(t0, t1, e);
-    });
+// Camera presets, eased (position, aim and lens).
+function setCamera(name, dur = 700) {
+  for (const o of document.querySelectorAll('[data-cam]')) o.classList.toggle('on', o.dataset.cam === name);
+  const c = CAMERAS[name];
+  const p0 = camera.position.clone();
+  const t0 = controls.target.clone();
+  const f0 = camera.fov;
+  const p1 = new THREE.Vector3(...c.pos);
+  const t1 = new THREE.Vector3(...c.target);
+  const apply = (e) => {
+    camera.position.lerpVectors(p0, p1, e);
+    controls.target.lerpVectors(t0, t1, e);
+    camera.fov = f0 + (c.fov - f0) * e;
+    camera.updateProjectionMatrix();
   };
+  if (!dur) return apply(1);
+  tween(dur, (t) => apply(ease(t)));
 }
+for (const b of document.querySelectorAll('[data-cam]')) b.onclick = () => setCamera(b.dataset.cam);
 
 // Rules dialog.
 $('#rulesBody').innerHTML = RULES_DOC.map((s) => `<h3>${esc(s.title)}</h3><ul>${s.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`).join('');
@@ -795,6 +798,7 @@ window.__courtwise = { state, show, nextShot, resetAll, startPlay, PLAYS, camera
 // ------------------------------------------------------------------ boot
 
 renderPlays();
+setCamera('tv', 0);
 resetAll();
 requestAnimationFrame(tick);
 setTimeout(() => $('#hint').classList.add('gone'), 9000);

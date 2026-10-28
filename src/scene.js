@@ -24,7 +24,7 @@ export function createScene(canvas) {
 
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x0e151b);
-  scene.fog = new THREE.Fog(0x0e151b, 30, 60);
+  scene.fog = new THREE.Fog(0x0e151b, 45, 90);
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
   camera.position.set(0, 9, 14);
@@ -34,7 +34,7 @@ export function createScene(canvas) {
   controls.enableDamping = true;
   controls.maxPolarAngle = Math.PI / 2 - 0.05;
   controls.minDistance = 4;
-  controls.maxDistance = 35;
+  controls.maxDistance = 40;
 
   scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1f2a33, 0.9));
   const sun = new THREE.DirectionalLight(0xffffff, 1.6);
@@ -503,9 +503,12 @@ export function createPath(curve) {
   return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: COLORS.path, transparent: true, opacity: 0.75 }));
 }
 
+// fov is the vertical field of view. The TV view is the broadcast angle: high behind
+// one baseline, looking down, on a long lens so both halves of the court look similar.
 export const CAMERAS = {
-  blue: { pos: [0, 8.5, 13.5], target: [0, 0, -0.5] },
-  orange: { pos: [0, 8.5, -13.5], target: [0, 0, 0.5] },
-  top: { pos: [0, 19, 0.01], target: [0, 0, 0] },
-  side: { pos: [13, 6.5, 0], target: [0, 0, 0] },
+  tv: { pos: [0, 14.5, 20.5], target: [0, 0, 1.3], fov: 30 },
+  blue: { pos: [0, 8.5, 13.5], target: [0, 0, -0.5], fov: 45 },
+  orange: { pos: [0, 8.5, -13.5], target: [0, 0, 0.5], fov: 45 },
+  top: { pos: [0, 19, 0.01], target: [0, 0, 0], fov: 45 },
+  side: { pos: [13, 6.5, 0], target: [0, 0, 0], fov: 45 },
 };

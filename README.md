@@ -36,7 +36,7 @@ Pause / Play to control the replay. The plays run through the same rule engine, 
 agree with the setup mode. They're defined in `src/plays.js`, and adding one is a few lines.
 
 Drag empty space to orbit the camera, and pinch or scroll to zoom. The camera buttons jump to
-either end, top-down or side-on. For serves, choose the serving side's score (even means the
+the TV broadcast angle (the default), either end, top-down or side-on. For serves, choose the serving side's score (even means the
 right court, odd the left) and **Place players for this serve** puts everyone where the Laws say.
 
 The rules, and the sources they came from, are in [RULES.md](RULES.md).
