@@ -2,7 +2,7 @@
 
 An interactive 3D badminton court for answering "where should I stand?". Place the players
 and the shuttle, pick a shot and its direction, and Courtwise moves everyone to where they
-should go next, with a short explanation for each player. It works for singles and doubles.
+should go next, with a role tag over each player. It works for singles and doubles.
 
 ## Using it
 
