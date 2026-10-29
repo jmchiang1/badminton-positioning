@@ -15,10 +15,9 @@ should go next, with a role tag over each player. It works for singles and doubl
    push, net shot or block.
 4. Pick a **direction**: straight, middle or cross-court (for serves: to the T, body or wide).
    You can also drag the yellow target ring.
-5. Press **Show where to go**. The shuttle flies, and the players move to their spots with
+5. Press **Show where to go** on the floating bar (it becomes **Back to setup**). The shuttle flies, and the players move to their spots with
    footwork, leaving ghosts and arrows where they started. A short role tag floats over each
    player, such as "Straight defender" or "Front: net". Faults and out shots show as a banner.
-6. **Next shot from here** carries the rally on: the receiver now has the shuttle where it landed.
 
 **Snapping.** With "Snap to common spots" on, dragged things lock to preset spots, which
 light up while you drag:
@@ -31,12 +30,12 @@ Turn it off to place things freely.
 
 **Plays.** Replays of common high-level patterns: a short serve followed by a third-shot attack,
 punishing the flick serve, drop–net–kill, turning defence into attack, and singles clear–drop and
-four-corner rallies. Each shot pauses with everyone at their new spot. Use ‹ › to step and
-Pause / Play to control the replay. The plays run through the same rule engine, so they always
+four-corner rallies. Each shot pauses with everyone at their new spot. The floating bar switches to
+play controls: ‹ › to step, Pause / Play, and Stop. The plays run through the same rule engine, so they always
 agree with the setup mode. They're defined in `src/plays.js`, and adding one is a few lines.
 
-Drag empty space to orbit the camera, and pinch or scroll to zoom. The camera buttons jump to
-the TV broadcast angle (the default), either end, top-down or side-on. For serves, choose the serving side's score (even means the
+Drag empty space to orbit the camera, and pinch or scroll to zoom. Camera: pick an end (Blue or Orange)
+and a view from it: TV (the broadcast angle, the default), Low, Top or Side. For serves, choose the serving side's score (even means the
 right court, odd the left) and **Place players for this serve** puts everyone where the Laws say.
 
 The rules, and the sources they came from, are in [RULES.md](RULES.md).

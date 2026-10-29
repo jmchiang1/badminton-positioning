@@ -503,12 +503,19 @@ export function createPath(curve) {
   return new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ color: COLORS.path, transparent: true, opacity: 0.75 }));
 }
 
-// fov is the vertical field of view. The TV view is the broadcast angle: high behind
-// one baseline, looking down, on a long lens so both halves of the court look similar.
-export const CAMERAS = {
+// Camera views, from Blue's end (Orange's end mirrors x and z). fov is the vertical
+// field of view. TV is the broadcast angle: high behind the baseline, looking down,
+// on a long lens so both halves of the court look similar.
+const VIEWS = {
   tv: { pos: [0, 14.5, 20.5], target: [0, 0, 1.3], fov: 30 },
-  blue: { pos: [0, 8.5, 13.5], target: [0, 0, -0.5], fov: 45 },
-  orange: { pos: [0, 8.5, -13.5], target: [0, 0, 0.5], fov: 45 },
+  low: { pos: [0, 8.5, 13.5], target: [0, 0, -0.5], fov: 45 },
   top: { pos: [0, 19, 0.01], target: [0, 0, 0], fov: 45 },
   side: { pos: [13, 6.5, 0], target: [0, 0, 0], fov: 45 },
 };
+
+export function cameraView(view, end) {
+  const v = VIEWS[view];
+  const m = end === 'orange' ? -1 : 1;
+  const flip = ([x, y, z]) => [x * m, y, z * m];
+  return { pos: flip(v.pos), target: flip(v.target), fov: v.fov };
+}

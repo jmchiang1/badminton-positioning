@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import './styles.css';
 import {
   createScene, createPlayer, createShuttle, createTarget, createArrow, createGhost,
-  createPath, createSnapMarker, textSprite, flightCurve, COLORS, CAMERAS,
+  createPath, createSnapMarker, textSprite, flightCurve, COLORS, cameraView,
 } from './scene.js';
 import {
   SHOTS, SHOT_ORDER, TEAMS, recommend, defaultTarget, checkShot, serveSetup, teamOf, depthOf, zOf,
@@ -220,8 +220,11 @@ function tick(now) {
 
 let animating = false;
 
+let showToken = 0; // bumped to cancel a shot that's still animating
+
 async function show() {
   if (animating) return;
+  const token = ++showToken;
   const s = SHOTS[state.shot];
   const playersArr = activeIds().map((id) => ({ id, ...state.setup[id] }));
   const result = recommend({
@@ -259,6 +262,7 @@ async function show() {
   });
   const moves = activeIds().map((id) => (result.moves[id] ? walk(id, result.moves[id]) : null));
   await Promise.all([shuttleFlight, ...moves]);
+  if (token !== showToken) return; // cancelled mid-flight
   animating = false;
 
   for (const id of activeIds()) {
@@ -273,6 +277,12 @@ async function show() {
 }
 
 function backToSetup() {
+  if (animating) {
+    // Cancel the shot in flight: drop its tweens and let show() bail out.
+    showToken += 1;
+    for (const tw of tweens.splice(0)) tw.resolve();
+    animating = false;
+  }
   state.phase = 'setup';
   state.result = null;
   clearOverlay();
@@ -297,34 +307,8 @@ function advance(nextShotKey) {
   state.targetManual = false;
 }
 
-const NEXT_SHOT = { up: 'smash', attack: 'block', net: 'lift', flat: 'drive' };
-
-// Shots already played in the free rally, so ‹ can step back through them.
-const history = [];
-
-function nextShot() {
-  if (state.phase !== 'shown' || !state.result) return;
-  history.push(snapshot());
-  const s = SHOTS[state.shot];
-  let next = state.shot === 'drop' || state.shot === 'net' ? 'lift' : NEXT_SHOT[s.cls];
-  if (next === 'block' && state.mode === 'singles') next = 'lift';
-  advance(next);
-  state.direction = 'straight';
-  refreshTarget();
-  backToSetup();
-  renderControls();
-}
-
-function undoShot() {
-  if (!history.length || animating) return;
-  restore(history.pop());
-  backToSetup();
-  renderControls();
-}
-
 function resetAll() {
   stopPlay();
-  history.length = 0;
   state.setup = structuredClone(START[state.mode]);
   state.hitterId = 'A1';
   state.shot = 'smash';
@@ -377,7 +361,6 @@ function startPlay(def) {
     state.hitterId = def.start.hitter;
   }
   state.contact = contactFor(state.hitterId);
-  history.length = 0;
   play = { def, i: 0, paused: false, snapshots: [] };
   backToSetup();
   renderControls();
@@ -476,24 +459,16 @@ function stopPlay() {
 // The floating bar: a play's progress, or the free rally outside a play.
 function updateCaption(done = false) {
   const pp = $('#playPause');
+  $('#customCtl').hidden = !!play;
+  $('#playCtl').hidden = !play;
   if (!play) {
-    const shotNo = history.length + 1;
-    $('#stepCount').innerHTML = `Your rally · Shot ${shotNo}`;
+    $('#stepCount').textContent = 'Your shot';
     $('#stepNote').textContent = `${NAMES[state.hitterId]}: ${SHOTS[state.shot].label.toLowerCase()}`;
-    pp.hidden = true;
-    $('#prevStep').disabled = history.length === 0;
-    $('#prevStep').setAttribute('aria-label', 'Previous shot');
-    const label = state.phase === 'shown' ? 'Next shot from here' : 'Show where to go';
-    $('#nextStep').disabled = false;
-    $('#nextStep').setAttribute('aria-label', label);
-    $('#nextStep').title = label;
+    $('#showBtn').textContent = state.phase === 'shown' ? 'Back to setup' : 'Show where to go';
     return;
   }
   const { def, i } = play;
-  pp.hidden = false;
   $('#prevStep').disabled = i === 0;
-  $('#nextStep').disabled = false;
-  $('#nextStep').setAttribute('aria-label', 'Next shot');
   $('#stepCount').innerHTML = `<i class="ptitle">${esc(def.title)} · </i>Shot ${i + 1} of ${def.steps.length}`;
   $('#stepNote').textContent = def.steps[i].note;
   const ended = done || (play.paused && i >= def.steps.length - 1);
@@ -726,7 +701,6 @@ function renderControls() {
 }
 
 function syncButtons() {
-  $('#show').textContent = state.phase === 'shown' ? 'Back to setup' : 'Show where to go';
   updateCaption();
 }
 
@@ -747,30 +721,42 @@ for (const b of document.querySelectorAll('[data-score]')) {
   };
 }
 $('#setupServe').onclick = () => { stopPlay(); applyServeSetup(); };
-$('#show').onclick = () => {
-  stopPlay();
+$('#showBtn').onclick = () => {
+  if (animating) return;
   if (state.phase === 'shown') backToSetup();
   else show();
 };
 $('#snap').onchange = (e) => { state.snap = e.target.checked; };
 $('#playPause').onclick = togglePause;
 $('#nextStep').onclick = () => {
-  if (!play) return state.phase === 'shown' ? nextShot() : show();
+  if (!play) return;
   play.paused = true;
   stepForward();
   updateCaption();
 };
 $('#prevStep').onclick = () => {
-  if (!play) return undoShot();
+  if (!play) return;
   play.paused = true;
   stepBack();
 };
-$('#resetBtn').onclick = resetAll;
+$('#stopPlay').onclick = () => {
+  stopPlay();
+  backToSetup();
+};
 
 // Camera presets, eased (position, aim and lens).
-function setCamera(name, dur = 700) {
-  for (const o of document.querySelectorAll('[data-cam]')) o.classList.toggle('on', o.dataset.cam === name);
-  const c = CAMERAS[name];
+// Two independent choices: which end, and which view from it.
+const cam = { end: 'blue', view: 'tv' };
+function setCamera(dur = 700) {
+  for (const o of document.querySelectorAll('[data-end]')) {
+    o.classList.toggle('on', o.dataset.end === cam.end);
+    o.setAttribute('aria-checked', o.dataset.end === cam.end);
+  }
+  for (const o of document.querySelectorAll('[data-view]')) {
+    o.classList.toggle('on', o.dataset.view === cam.view);
+    o.setAttribute('aria-checked', o.dataset.view === cam.view);
+  }
+  const c = cameraView(cam.view, cam.end);
   const p0 = camera.position.clone();
   const t0 = controls.target.clone();
   const f0 = camera.fov;
@@ -785,7 +771,8 @@ function setCamera(name, dur = 700) {
   if (!dur) return apply(1);
   tween(dur, (t) => apply(ease(t)));
 }
-for (const b of document.querySelectorAll('[data-cam]')) b.onclick = () => setCamera(b.dataset.cam);
+for (const b of document.querySelectorAll('[data-end]')) b.onclick = () => { cam.end = b.dataset.end; setCamera(); };
+for (const b of document.querySelectorAll('[data-view]')) b.onclick = () => { cam.view = b.dataset.view; setCamera(); };
 
 // Rules dialog.
 $('#rulesBody').innerHTML = RULES_DOC.map((s) => `<h3>${esc(s.title)}</h3><ul>${s.items.map((i) => `<li>${esc(i)}</li>`).join('')}</ul>`).join('');
@@ -793,12 +780,12 @@ $('#openRules').onclick = () => $('#rules').showModal();
 $('#closeRules').onclick = () => $('#rules').close();
 
 // Debug handle for the console.
-window.__courtwise = { state, show, nextShot, resetAll, startPlay, PLAYS, camera, THREE, get play() { return play; }, get animating() { return animating; } };
+window.__courtwise = { state, show, resetAll, cam, startPlay, PLAYS, camera, THREE, get play() { return play; }, get animating() { return animating; } };
 
 // ------------------------------------------------------------------ boot
 
 renderPlays();
-setCamera('tv', 0);
+setCamera(0);
 resetAll();
 requestAnimationFrame(tick);
 setTimeout(() => $('#hint').classList.add('gone'), 9000);

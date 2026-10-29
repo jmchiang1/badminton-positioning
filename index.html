@@ -17,19 +17,27 @@
         <div class="notes" id="notes" aria-live="polite"></div>
         <div class="playbar" id="playbar">
           <p class="caption"><span id="stepCount"></span><b id="stepNote"></b></p>
-          <div class="playctl">
+          <div class="playctl" id="customCtl">
+            <button id="showBtn" class="go">Show where to go</button>
+          </div>
+          <div class="playctl" id="playCtl" hidden>
             <button id="prevStep" aria-label="Previous shot" title="Previous shot">&#8249;</button>
-            <button id="playPause" class="pp" aria-label="Pause" hidden>Pause</button>
-            <button id="nextStep" aria-label="Next shot from here" title="Next shot from here">&#8250;</button>
-            <button id="resetBtn" class="txt" aria-label="Reset the court" title="Reset the court">Reset</button>
+            <button id="playPause" class="pp" aria-label="Pause">Pause</button>
+            <button id="nextStep" aria-label="Next shot" title="Next shot">&#8250;</button>
+            <button id="stopPlay" class="txt" aria-label="Stop the play" title="Stop the play">Stop</button>
           </div>
         </div>
         <nav class="cams" aria-label="Camera">
-          <button data-cam="tv" class="on">TV</button>
-          <button data-cam="blue">Blue end</button>
-          <button data-cam="orange">Orange end</button>
-          <button data-cam="top">Top</button>
-          <button data-cam="side">Side</button>
+          <div class="camgroup" role="radiogroup" aria-label="Which end">
+            <button role="radio" data-end="blue" class="on">Blue end</button>
+            <button role="radio" data-end="orange">Orange end</button>
+          </div>
+          <div class="camgroup" role="radiogroup" aria-label="View">
+            <button role="radio" data-view="tv" class="on">TV</button>
+            <button role="radio" data-view="low">Low</button>
+            <button role="radio" data-view="top">Top</button>
+            <button role="radio" data-view="side">Side</button>
+          </div>
         </nav>
       </section>
 
@@ -72,10 +80,6 @@
           <input type="checkbox" id="snap" checked />
           <span>Snap to common spots</span>
         </label>
-
-        <div class="actions">
-          <button class="primary" id="show">Show where to go</button>
-        </div>
 
         <section class="step plays">
           <h2><span>&#9654;</span> Plays</h2>

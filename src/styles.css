@@ -31,12 +31,16 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .hint.gone { opacity: 0; pointer-events: none; }
 
-.cams { position: absolute; left: 16px; bottom: 16px; display: flex; gap: 6px; flex-wrap: wrap; }
-.cams button {
-  padding: 8px 12px; min-height: 40px; border-radius: 999px; border: 1px solid var(--line);
-  background: rgb(20 30 38 / 0.85); font-size: 13px; color: var(--muted);
+.cams { position: absolute; left: 16px; bottom: 16px; display: flex; gap: 8px; flex-wrap: wrap; }
+.camgroup {
+  display: flex; gap: 2px; padding: 3px; border-radius: 999px; border: 1px solid var(--line);
+  background: rgb(20 30 38 / 0.85); backdrop-filter: blur(6px);
 }
-.cams button.on { color: var(--text); border-color: var(--muted); }
+.camgroup button {
+  padding: 6px 12px; min-height: 36px; border-radius: 999px; border: 0;
+  background: transparent; font-size: 13px; color: var(--muted);
+}
+.camgroup button.on { background: var(--text); color: var(--bg); font-weight: 600; }
 
 .panel {
   background: var(--panel); border-left: 1px solid var(--line);
@@ -98,7 +102,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: rgb(14 21 27 / 0.9); border: 1px solid var(--line); backdrop-filter: blur(8px);
   display: flex; align-items: center; gap: 12px;
 }
-.playctl [hidden] { display: none; }
+.playctl[hidden], .playctl [hidden] { display: none; }
 .playctl button:disabled { opacity: 0.35; cursor: default; }
 .serve.off { opacity: 0.4; }
 .serve.off button { cursor: default; }
@@ -111,6 +115,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   background: var(--panel-2); font-size: 18px;
 }
 .playctl .pp, .playctl .txt { font-size: 13px; padding: 0 10px; }
+.playctl .go {
+  min-height: 48px; padding: 0 18px; border: 0; border-radius: 12px; background: var(--accent);
+  color: var(--accent-ink); font-weight: 700; font-size: 15px;
+}
 
 .plays #plays { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
 .play {
@@ -139,8 +147,9 @@ dialog li { margin: 4px 0; color: #d3dde3; font-size: 14px; }
   .app { grid-template-columns: 1fr; grid-template-rows: 52dvh 1fr; }
   .panel { border-left: 0; border-top: 1px solid var(--line); padding: 16px 16px 28px; }
   .hint { right: 16px; max-width: none; font-size: 12px; }
-  .cams { left: 8px; bottom: 8px; }
-  .cams button { min-height: 36px; padding: 6px 10px; font-size: 12px; }
+  .cams { left: 8px; right: 8px; bottom: 8px; gap: 6px; }
+  .camgroup button { min-height: 34px; padding: 4px 10px; font-size: 12px; }
+  .playctl .go { min-height: 44px; padding: 0 14px; font-size: 14px; }
   .playbar { top: 8px; bottom: auto; padding: 8px; gap: 8px; }
   .notes { top: 84px; }
   .hint { display: none; }
