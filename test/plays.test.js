@@ -31,7 +31,7 @@ for (const def of PLAYS) {
       const target = step.to
         ? { x: step.to.x, z: zOf(R, step.to.d) }
         : defaultTarget({ mode: def.mode, shot: step.shot, contact, hitterTeam: H, direction: step.dir, server: setup[hitterId] });
-      const warns = checkShot({ mode: def.mode, shot: step.shot, contact, hitterTeam: H, target, score: def.start.score ?? 'even', server: setup[hitterId] })
+      const warns = checkShot({ mode: def.mode, shot: step.shot, contact, hitterTeam: H, target, score: def.start.score ?? 'even', server: setup[hitterId], players: ids.map((id) => ({ id, ...setup[id] })) })
         .filter((n) => n.level === 'warn');
       assert.deepEqual(warns, [], `step ${i + 1} (${step.shot}) should be legal`);
       const r = recommend({ mode: def.mode, shot: step.shot, players: ids.map((id) => ({ id, ...setup[id] })), hitterId, target, contact });
@@ -41,8 +41,8 @@ for (const def of PLAYS) {
       setup = Object.fromEntries(ids.map((id) => [id, { x: r.moves[id].x, z: r.moves[id].z }]));
       const d = Math.max(0.6, Math.min(6.6, depthOf(R, target.z)));
       contact = { x: Math.max(-3, Math.min(3, target.x)), z: zOf(R, d) };
-      hitterId = ids.filter((id) => id[0] === R)
-        .sort((a, b) => ((setup[a].x - contact.x) ** 2 + (setup[a].z - contact.z) ** 2) - ((setup[b].x - contact.x) ** 2 + (setup[b].z - contact.z) ** 2))[0];
+      hitterId = r.receiverId;
+      assert.equal(hitterId[0], R, `step ${i + 1}: the next shot is played by the other side`);
     });
   });
 }

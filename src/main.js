@@ -234,6 +234,7 @@ async function show() {
   const notes = checkShot({
     mode: state.mode, shot: state.shot, contact: state.contact,
     hitterTeam: teamOf(state.hitterId), target: state.target, score: state.score, server: state.setup[state.hitterId],
+    players: playersArr,
   }).filter((n) => n.level === 'warn');
   state.result = result;
   state.phase = 'shown';
@@ -302,7 +303,8 @@ function advance(nextShotKey) {
   arrive.x = lim(arrive.x, 3.0);
   arrive.z = zOf(recvTeam, Math.max(0.6, Math.min(6.6, depthOf(recvTeam, arrive.z))));
   state.contact = arrive;
-  state.hitterId = nearestOnSide(arrive);
+  // The engine says who plays next (after a serve, only the receiver may).
+  state.hitterId = state.result?.receiverId ?? nearestOnSide(arrive);
   state.shot = nextShotKey;
   state.targetManual = false;
 }

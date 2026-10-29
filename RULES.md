@@ -96,13 +96,20 @@ Based on the BWF Laws of Badminton:
   The net is 1.524 m at the centre and 1.55 m at the posts.
 - Service courts: the server serves from the right service court when the serving side's score
   is even, and from the left when it's odd. The serve goes diagonally to the opposite court.
+- The server and receiver stand inside diagonally opposite service courts, not touching the
+  lines, until the serve is struck. In doubles the service court ends at the long service line.
+- **Only the receiver may return the serve.** In doubles their partner may not, even if a flick
+  serve goes over the receiver towards them. After the return, either partner may hit.
 - The server stands behind the short service line. The whole shuttle is below 1.15 m at
   contact, in one continuous forward swing, with both feet on the floor.
+- Each side hits the shuttle once before it crosses back. Partners can't both hit it in a row.
 - Doubles serves past the long service line are out. Singles uses the full length but the
   narrow width, so the outer tramlines are out in singles.
 
-The app flags (but still explains): a serve from the wrong service court for the score, a
-serve that isn't diagonal, short or long serves, shots landing out, overheads played from
+The engine always hands a serve's return to the receiver, and every next shot to the other
+side. The app flags (but still explains): a serve from the wrong service court for the score,
+a server outside their service court, no receiver standing in the receiving court, a serve
+that isn't diagonal, short or long serves, shots landing out, overheads played from
 the forecourt, net shots played from deep, and lifts or smashes to the middle.
 
 ## Not modelled (yet)

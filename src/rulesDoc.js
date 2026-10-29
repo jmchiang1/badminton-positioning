@@ -64,7 +64,10 @@ export const RULES_DOC = [
     items: [
       'Court: 13.40 m × 6.10 m (doubles), 5.18 m wide for singles. Net 1.524 m at the centre, 1.55 m at the posts.',
       'Serve from the right service court when the serving side\'s score is even, and from the left when it is odd. The serve goes to the court diagonally opposite.',
+      'The server and receiver stand inside diagonally opposite service courts, not touching the lines, until the serve is struck.',
+      'Only the receiver may return the serve. In doubles their partner may not, even when a flick serve goes over the receiver towards them.',
       'The server stands behind the short service line. The shuttle must be hit below 1.15 m, in one continuous forward swing, with both feet on the floor.',
+      'Each side hits the shuttle once before it crosses the net. In doubles either partner may hit it in a rally, but not both in a row.',
       'Doubles serves are out past the long service line (0.76 m inside the back line). In singles the full length counts.',
       'Singles is played inside the inner sidelines. The outer tramlines are out.',
     ],

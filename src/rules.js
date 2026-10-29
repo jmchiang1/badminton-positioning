@@ -106,10 +106,39 @@ export function defaultTarget({ mode, shot, contact, hitterTeam, direction, serv
   return { x, z: zOf(recv, depth) };
 }
 
+// The service court diagonally opposite the server, on the receiving side:
+// { xSign, depthMin, depthMax, halfWidth } in that side's depth terms.
+export function receivingCourt(mode, server) {
+  return {
+    xSign: server.x >= 0 ? -1 : 1, // diagonally opposite keeps the opposite x sign
+    depthMin: COURT.shortService,
+    depthMax: mode === 'doubles' ? COURT.doublesLongService : COURT.halfLength,
+    halfWidth: halfWidth(mode),
+  };
+}
+
+// Only the player in the diagonally opposite service court may return a serve
+// (Laws 10 and 11). In doubles that is the receiver, never their partner, even
+// if the partner is nearer to where the serve lands.
+export function serveReceiver(mode, serverTeam, server, players) {
+  const R = sideOf(serverTeam);
+  const box = receivingCourt(mode, server);
+  const centre = { x: box.xSign * box.halfWidth / 2, z: zOf(R, (box.depthMin + box.depthMax) / 2) };
+  const cands = players.filter((p) => teamOf(p.id) === R);
+  return cands.sort((a, b) => dist2(a, centre) - dist2(b, centre))[0];
+}
+
+function inReceivingCourt(mode, serverTeam, server, p) {
+  const box = receivingCourt(mode, server);
+  const d = depthOf(sideOf(serverTeam), p.z);
+  return Math.sign(p.x) === box.xSign && Math.abs(p.x) <= box.halfWidth && d >= box.depthMin && d <= box.depthMax;
+}
+
 // ------------------------------------------------------------- legality notes
 
 // `server` is where the server stands (the Laws are about their feet, not the shuttle).
-export function checkShot({ mode, shot, contact, hitterTeam, target, score, server }) {
+// `players` (optional) lets serves check that someone is standing in the receiving court.
+export function checkShot({ mode, shot, contact, hitterTeam, target, score, server, players }) {
   const s = SHOTS[shot];
   const notes = [];
   const recv = sideOf(hitterTeam);
@@ -130,7 +159,12 @@ export function checkShot({ mode, shot, contact, hitterTeam, target, score, serv
         text: `With an ${score} score the server must serve from their ${even ? 'right' : 'left'} service court (Law 10/11).`,
       });
     }
-    if (depthOf(hitterTeam, stand.z) < COURT.shortService) notes.push({ level: 'warn', text: 'The server must stand behind the short service line.' });
+    const sd = depthOf(hitterTeam, stand.z);
+    const sMax = mode === 'doubles' ? COURT.doublesLongService : COURT.halfLength;
+    if (sd < COURT.shortService) notes.push({ level: 'warn', text: 'The server must stand behind the short service line.' });
+    else if (sd > sMax || Math.abs(stand.x) > hw) {
+      notes.push({ level: 'warn', text: 'The server must stand inside their service court, not past its sideline or back line (Law 9.1).' });
+    }
     if (Math.sign(target.x) === Math.sign(stand.x) && Math.abs(target.x) > 0.05) {
       notes.push({ level: 'warn', text: 'A serve must land in the service court diagonally opposite.' });
     }
@@ -145,6 +179,12 @@ export function checkShot({ mode, shot, contact, hitterTeam, target, score, serv
       });
     }
     if (Math.abs(target.x) > hw) notes.push({ level: 'warn', text: 'That serve lands outside the sideline: out.' });
+    if (players) {
+      const recv = players.filter((p) => teamOf(p.id) === sideOf(hitterTeam) && (mode === 'doubles' || p.id.endsWith('1')));
+      if (recv.length && !recv.some((p) => inReceivingCourt(mode, hitterTeam, stand, p))) {
+        notes.push({ level: 'warn', text: 'The receiver must stand in the service court diagonally opposite the server until the serve is struck (Law 9.1).' });
+      }
+    }
     notes.push({
       level: 'info',
       text: 'Serve rules: hit the shuttle below 1.15 m, one continuous forward swing, both feet in contact with the floor until it is struck.',
@@ -308,7 +348,21 @@ function singles(c) {
 
   const formation = { [H]: 'base', [R]: 'to the shuttle' };
   const summary = `Singles: ${s.label.toLowerCase()} from ${c.H === 'A' ? 'Blue' : 'Orange'}. In singles you cover the whole court, so after every shot you go back to a base in the centre of your opponent's possible replies, not the centre of the court.`;
-  return { moves, summary, formation, hx };
+  return { moves, summary, formation, hx, receiverId: opp?.id };
+}
+
+// Who plays the next shot: the receiver of a serve, otherwise the receiving
+// player who ends up nearest the shuttle.
+function nextHitter(c, moves) {
+  if (c.s.serve) return serveReceiver(c.mode, c.H, c.hitter, c.receivers)?.id;
+  let best = null;
+  for (const p of c.receivers) {
+    const m = moves[p.id];
+    if (!m) continue;
+    const d = dist2(m, c.target);
+    if (!best || d < best.d) best = { id: p.id, d };
+  }
+  return best?.id;
 }
 
 // ------------------------------------------------------------- doubles
@@ -457,8 +511,11 @@ function doubles(c) {
 
   // ---- receiving team ----
   if (recv.length) {
-    const closest = [...recv].sort((a, b) => dist2(a, target) - dist2(b, target));
-    const [r, q] = closest;
+    // Serves: only the receiver may return it. Otherwise whoever is nearer takes it.
+    const r = s.serve
+      ? serveReceiver('doubles', H, c.hitter, recv)
+      : [...recv].sort((a, b) => dist2(a, target) - dist2(b, target))[0];
+    const q = recv.find((p) => p !== r);
     if (s.cls === 'up') {
       const backSp = spot(R, tx, td + 0.35, 'doubles');
       const frontSp = spot(R, tx * 0.35, 2.0, 'doubles');
@@ -547,7 +604,7 @@ function doubles(c) {
     flat: 'A flat exchange is neutral. Both sides stay level in the mid-court until someone can hit down.',
   }[s.cls];
   const summary = `Doubles: ${s.label.toLowerCase()} from ${H === 'A' ? 'Blue' : 'Orange'}. ${principle}`;
-  return { moves, summary, formation };
+  return { moves, summary, formation, receiverId: nextHitter(c, moves) };
 }
 
 // ------------------------------------------------------------- serve setup
