@@ -35,7 +35,7 @@ play controls: ‹ › to step, Pause / Play, and Stop. The plays run through th
 agree with the setup mode. They're defined in `src/plays.js`, and adding one is a few lines.
 
 Drag empty space to orbit the camera, and pinch or scroll to zoom. Camera: pick an end (Blue or Orange)
-and a view from it: TV (the broadcast angle, the default), Low, Top or Side. For serves, choose the serving side's score (even means the
+and a view from it: Broadcast (the TV angle, the default), Baseline, Top or Side. For serves, choose the serving side's score (even means the
 right court, odd the left) and **Place players for this serve** puts everyone where the Laws say.
 
 The rules, and the sources they came from, are in [RULES.md](RULES.md).
@@ -66,6 +66,8 @@ automatically (`.github/workflows/pages.yml`), after the tests pass.
 
 - `src/rules.js`: the positioning engine. Pure functions with no three.js, unit tested in `test/`.
 - `src/scene.js`: the three.js court, net, jointed player models, shuttle, arrows and flight paths.
+- `src/arena.js`: the tournament arena: LED boards, stands and crowd, lights, end screens.
+  The sponsors are made up; real brands only with their permission.
 - `src/snaps.js`: the preset snap spots.
 - `src/plays.js`: the scripted rallies.
 - `src/main.js`: app state, dragging, animation and the side panel.

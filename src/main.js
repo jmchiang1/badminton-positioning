@@ -5,7 +5,7 @@ import {
   createPath, createSnapMarker, textSprite, flightCurve, COLORS, cameraView,
 } from './scene.js';
 import {
-  SHOTS, SHOT_ORDER, TEAMS, recommend, defaultTarget, checkShot, serveSetup, teamOf, depthOf, zOf,
+  SHOTS, TEAMS, recommend, defaultTarget, checkShot, serveSetup, teamOf, depthOf, zOf,
 } from './rules.js';
 import { shuttleSnaps, serveTargetSnaps, playerSnaps, nearest } from './snaps.js';
 import { PLAYS } from './plays.js';
@@ -628,7 +628,7 @@ function renderHitters() {
   for (const id of activeIds()) {
     const b = document.createElement('button');
     b.className = `chip${id === state.hitterId ? ' on' : ''}`;
-    b.innerHTML = `<i style="background:${teamOf(id) === 'A' ? 'var(--blue)' : 'var(--orange)'}"></i>${NAMES[id]}`;
+    b.innerHTML = `<i style="background:${teamOf(id) === 'A' ? 'var(--team-blue)' : 'var(--team-orange)'}"></i>${NAMES[id]}`;
     b.setAttribute('aria-pressed', id === state.hitterId);
     b.onclick = () => setHitter(id);
     el.append(b);
@@ -636,10 +636,31 @@ function renderHitters() {
   updateCaption();
 }
 
+// Shots grouped by where on the court they're played from.
+const SHOT_GROUPS = [
+  ['Serve', ['serveShort', 'serveHigh']],
+  ['Rear court', ['clear', 'smash', 'drop']],
+  ['Mid-court', ['drive', 'push', 'block']],
+  ['Forecourt', ['net', 'kill', 'lift']],
+];
+
 function renderShots() {
   const el = $('#shots');
   el.innerHTML = '';
-  for (const key of SHOT_ORDER) {
+  for (const [label, keys] of SHOT_GROUPS) {
+    const row = document.createElement('div');
+    row.className = 'shotrow';
+    row.innerHTML = `<span class="shotlabel">${label}</span>`;
+    const grid = document.createElement('div');
+    grid.className = 'shots';
+    row.append(grid);
+    el.append(row);
+    for (const key of keys) renderShot(grid, key);
+  }
+}
+
+function renderShot(el, key) {
+  {
     const b = document.createElement('button');
     b.textContent = SHOTS[key].label;
     b.className = key === state.shot ? 'on' : '';
@@ -746,7 +767,7 @@ $('#stopPlay').onclick = () => {
 
 // Camera presets, eased (position, aim and lens).
 // Two independent choices: which end, and which view from it.
-const cam = { end: 'blue', view: 'tv' };
+const cam = { end: 'blue', view: 'broadcast' };
 function setCamera(dur = 700) {
   for (const o of document.querySelectorAll('[data-end]')) {
     o.classList.toggle('on', o.dataset.end === cam.end);

@@ -2,15 +2,16 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { COURT } from './rules.js';
+import { buildArena } from './arena.js';
 
 export const COLORS = {
   A: 0x3b82f6,
   B: 0xf97316,
-  court: 0x2f7d5b,
-  surround: 0x1f2a33,
+  court: 0x1f8a55,
+  surround: 0x1f4fa3,
   line: 0xf4f4ef,
-  target: 0xfacc15,
-  path: 0xfde68a,
+  target: 0xffd400,
+  path: 0xfff1a6,
 };
 
 const LINE_W = 0.04;
@@ -23,8 +24,8 @@ export function createScene(canvas) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0e151b);
-  scene.fog = new THREE.Fog(0x0e151b, 45, 90);
+  scene.background = new THREE.Color(0x060f20);
+  scene.fog = new THREE.Fog(0x060f20, 45, 90);
 
   const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 200);
   camera.position.set(0, 9, 14);
@@ -36,7 +37,7 @@ export function createScene(canvas) {
   controls.minDistance = 4;
   controls.maxDistance = 40;
 
-  scene.add(new THREE.HemisphereLight(0xdbeafe, 0x1f2a33, 0.9));
+  scene.add(new THREE.HemisphereLight(0xeef4ff, 0x16264a, 0.9));
   const sun = new THREE.DirectionalLight(0xffffff, 1.6);
   sun.position.set(5, 14, 6);
   sun.castShadow = true;
@@ -44,6 +45,7 @@ export function createScene(canvas) {
   Object.assign(sun.shadow.camera, { left: -10, right: 10, top: 10, bottom: -10, near: 1, far: 40 });
   scene.add(sun);
 
+  buildArena(scene);
   buildCourt(scene);
   buildNet(scene);
 
@@ -64,7 +66,7 @@ export function createScene(canvas) {
 
 function buildCourt(scene) {
   const surround = new THREE.Mesh(
-    new THREE.PlaneGeometry(22, 30),
+    new THREE.PlaneGeometry(11.4, 19),
     new THREE.MeshStandardMaterial({ color: COLORS.surround, roughness: 0.95 }),
   );
   surround.rotation.x = -Math.PI / 2;
@@ -504,11 +506,11 @@ export function createPath(curve) {
 }
 
 // Camera views, from Blue's end (Orange's end mirrors x and z). fov is the vertical
-// field of view. TV is the broadcast angle: high behind the baseline, looking down,
+// field of view. Broadcast is the TV angle: high behind the baseline, looking down,
 // on a long lens so both halves of the court look similar.
 const VIEWS = {
-  tv: { pos: [0, 14.5, 20.5], target: [0, 0, 1.3], fov: 30 },
-  low: { pos: [0, 8.5, 13.5], target: [0, 0, -0.5], fov: 45 },
+  broadcast: { pos: [0, 14.5, 20.5], target: [0, 0, 1.3], fov: 30 },
+  baseline: { pos: [0, 8.5, 13.5], target: [0, 0, -0.5], fov: 45 },
   top: { pos: [0, 19, 0.01], target: [0, 0, 0], fov: 45 },
   side: { pos: [13, 6.5, 0], target: [0, 0, 0], fov: 45 },
 };
